@@ -1,0 +1,42 @@
+name: Build Minimal Debian Rootfs for iSH
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Repo
+      uses: actions/checkout@v3
+
+    - name: Install debootstrap
+      run: sudo apt-get update && sudo apt-get install -y debootstrap
+
+    - name: Build minimal Debian i386 rootfs
+      run: |
+        mkdir rootfs
+        sudo debootstrap --arch=i386 --variant=minbase bullseye rootfs http://deb.debian.org/debian
+
+        # Strip unnecessary files to reduce size
+        sudo rm -rf rootfs/usr/share/{doc,locale,man,info}
+        sudo rm -rf rootfs/var/cache/apt/archives/*
+        sudo rm -rf rootfs/var/lib/apt/lists/*
+
+        # Create minimal dpkg config to skip docs
+        echo "path-exclude=/usr/share/doc/*" | sudo tee -a rootfs/etc/dpkg/dpkg.cfg.d/exclude
+        echo "path-exclude=/usr/share/locale/*" | sudo tee -a rootfs/etc/dpkg/dpkg.cfg.d/exclude
+        echo "path-exclude=/usr/share/man/*" | sudo tee -a rootfs/etc/dpkg/dpkg.cfg.d/exclude
+
+        # Add DNS config
+        echo "nameserver 1.1.1.1" | sudo tee rootfs/etc/resolv.conf
+
+        # Package it
+        sudo tar -czf ish-debian-i386-rootfs.tar.gz -C rootfs .
+
+    - name: Upload rootfs artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ish-debian-i386-rootfs
+        path: ish-debian-i386-rootfs.tar.gz
